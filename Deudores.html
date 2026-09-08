@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Deudas / Pedidos</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .form-container, .historial-container {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 15px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover { background: #1e40af; }
+
+    .deuda {
+      background: #fff;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .acciones button {
+      background: #dc2626;
+      margin-left: 5px;
+    }
+    .acciones button:hover { background: #b91c1c; }
+
+    #total {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 15px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Registro de Deudas</h1>
+
+  <div class="form-container">
+    <label for="nombre">Nombre:</label>
+    <input type="text" id="nombre" placeholder="Ej: María">
+
+    <label for="cantidad">Cantidad:</label>
+    <input type="number" id="cantidad" placeholder="Ej: 5000">
+
+    <button onclick="agregarDeuda()">Agregar</button>
+    <button onclick="guardarCambios()" style="background:#059669;">Guardar cambios</button>
+    <button onclick="nuevoPedido()" style="background:#7c3aed;">Nuevo pedido</button>
+    <button onclick="mostrarHistorial()" style="background:#d97706;">Historial</button>
+  </div>
+
+  <div id="lista"></div>
+  <div id="total">Total adeudado: $0</div>
+
+  <div id="historial" class="historial-container" style="display:none;"></div>
+
+<script>
+
+  // ----- DATOS -----
+  let deudas = JSON.parse(localStorage.getItem('deudas_actual')) || [];
+  let historial = JSON.parse(localStorage.getItem('historial_de_pedidos')) || [];
+  let fechaInicio = localStorage.getItem('fecha_inicio') || new Date().toLocaleString();
+
+  // ----- RENDER PRINCIPAL -----
+  function renderDeudas() {
+    const lista = document.getElementById('lista');
+    lista.innerHTML = '';
+    let total = 0;
+
+    deudas.forEach((deuda, index) => {
+      total += deuda.cantidad;
+      const div = document.createElement('div');
+      div.className = 'deuda';
+      div.innerHTML = `
+        <span>${deuda.nombre} → $${deuda.cantidad}</span>
+        <div class="acciones">
+          <button onclick="modificar(${index}, prompt('Ingresa cantidad (usa negativo si pagó):'))">Modificar</button>
+          <button onclick="eliminar(${index})">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(div);
+    });
+
+    document.getElementById('total').innerText = "Total adeudado: $" + total;
+  }
+
+  // ----- AGREGAR -----
+  function agregarDeuda() {
+    const nombre = document.getElementById('nombre').value.trim();
+    const cantidad = parseInt(document.getElementById('cantidad').value);
+
+    if (nombre && !isNaN(cantidad)) {
+      let deudaExistente = deudas.find(d => d.nombre === nombre);
+      if (deudaExistente) {
+        deudaExistente.cantidad += cantidad;
+        if (deudaExistente.cantidad <= 0) {
+          deudas = deudas.filter(d => d.nombre !== nombre);
+        }
+      } else {
+        deudas.push({ nombre, cantidad });
+      }
+      renderDeudas();
+    }
+  }
+
+  // ----- MODIFICAR -----
+  function modificar(index, cantidad) {
+    cantidad = parseInt(cantidad);
+    if (!isNaN(cantidad)) {
+      deudas[index].cantidad += cantidad;
+      if (deudas[index].cantidad <= 0) {
+        deudas.splice(index, 1);
+      }
+      renderDeudas();
+    }
+  }
+
+  // ----- ELIMINAR -----
+  function eliminar(index) {
+    deudas.splice(index, 1);
+    renderDeudas();
+  }
+
+  // ----- GUARDAR -----
+  function guardarCambios() {
+    localStorage.setItem('deudas_actual', JSON.stringify(deudas));
+    localStorage.setItem('fecha_inicio', fechaInicio);
+    alert("Cambios guardados ✅");
+  }
+
+  // ----- NUEVO PEDIDO -----
+  function nuevoPedido() {
+    if (deudas.length > 0) {
+      historial.push({
+        fechaInicio: fechaInicio,
+        fechaFin: new Date().toLocaleString(),
+        deudas: deudas
+      });
+
+      localStorage.setItem('historial_de_pedidos', JSON.stringify(historial));
+    }
+
+    // Reiniciar todo
+    deudas = [];
+    fechaInicio = new Date().toLocaleString();
+    localStorage.setItem('fecha_inicio', fechaInicio);
+    localStorage.setItem('deudas_actual', JSON.stringify([]));
+
+    renderDeudas();
+    alert("Pedido reiniciado ✔ Ahora puedes comenzar uno nuevo.");
+  }
+
+  // ----- MOSTRAR HISTORIAL -----
+  function mostrarHistorial() {
+    const div = document.getElementById('historial');
+    div.style.display = "block";
+
+    if (historial.length === 0) {
+      div.innerHTML = "<h2>Historial</h2><p>No hay pedidos anteriores.</p>";
+      return;
+    }
+
+    div.innerHTML = "<h2>Historial de pedidos</h2>";
+
+    historial.forEach((p, i) => {
+      let total = p.deudas.reduce((acc, d) => acc + d.cantidad, 0);
+
+      div.innerHTML += `
+        <div class="form-container">
+          <h3>Pedido ${i+1}</h3>
+          <p><b>Fecha inicio:</b> ${p.fechaInicio}</p>
+          <p><b>Fecha fin:</b> ${p.fechaFin}</p>
+          <p><b>Total adeudado:</b> $${total}</p>
+
+          <h4>Detalles:</h4>
+          <ul>
+            ${p.deudas.map(d => `<li>${d.nombre}: $${d.cantidad}</li>`).join("")}
+          </ul>
+        </div>
+      `;
+    });
+  }
+
+  renderDeudas();
+</script>
+
+</body>
+</html>

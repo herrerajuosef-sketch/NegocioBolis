@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario de Bolis</title>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+    h1 { text-align: center; }
+
+    .card {
+      background: white;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    input, select, button {
+      margin: 5px 0;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      cursor: pointer;
+      background: #4CAF50;
+      color: white;
+      border: none;
+    }
+
+    button.secondary { background: #999; }
+    button.danger { background: #d9534f; }
+
+    .flex { display: flex; gap: 10px; }
+
+    .progress {
+      height: 15px;
+      background: #ddd;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: #4CAF50;
+      text-align: center;
+      color: white;
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table th, table td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+    }
+
+    #historial { display: none; }
+  </style>
+</head>
+
+<body>
+
+<h1>📊 Inventario de Bolis</h1>
+
+<!-- Botones principales -->
+<div class="flex" style="justify-content:center; margin-bottom:20px;">
+  <button onclick="nuevoPedido()" class="danger">🆕 Nuevo pedido</button>
+  <button onclick="mostrarHistorial()" class="secondary">📚 Historial</button>
+</div>
+
+<!-- Formulario de compras -->
+<div class="card">
+  <h2>➕ Registrar compra</h2>
+  <div id="compras"></div>
+  <button onclick="agregarFila()">➕ Añadir sabor</button>
+  <button onclick="guardarCompras()">💾 Guardar compra</button>
+</div>
+
+<!-- Resumen actual -->
+<div class="card">
+  <p><b>Inversión total:</b> $<span id="inversion">0</span></p>
+  <p><b>Ventas totales:</b> $<span id="ventas">0</span></p>
+  <p><b>Ganancia (sin restar inversión):</b> $<span id="ganancia">0</span></p>
+  <p><b>Ganancia neta (restando inversión):</b> $<span id="gananciaNeta">0</span></p>
+
+  <div class="progress">
+    <div id="barra" class="progress-bar" style="width:0%">0%</div>
+  </div>
+
+  <p class="text-sm">Meta: superar la inversión</p>
+  <button onclick="guardarDatos()">💾 Guardar cambios</button>
+</div>
+
+<!-- Lista sabores -->
+<div id="listaSabores"></div>
+
+<!-- Historial -->
+<div id="historial" class="card"></div>
+
+<script>
+  let sabores = JSON.parse(localStorage.getItem("sabores")) || [];
+  let historial = JSON.parse(localStorage.getItem("historial")) || [];
+  let fechaInicio = localStorage.getItem("fechaInicio") || new Date().toLocaleString();
+
+  function render() {
+    const lista = document.getElementById("listaSabores");
+    lista.innerHTML = "";
+
+    let inversion = 0, ventas = 0, ganancia = 0;
+
+    sabores.forEach((s, i) => {
+      inversion += s.precioCompra * (s.cantidad + s.vendidos + s.regalados);
+      ventas += s.vendidos * s.precioVenta;
+      ganancia += s.vendidos * (s.precioVenta - s.precioCompra);
+
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h2>${s.nombre}</h2>
+        <p>Precio compra: $${s.precioCompra} | Precio venta: $${s.precioVenta}</p>
+        <p>Cantidad restante: ${s.cantidad}</p>
+        <p>Vendidos: ${s.vendidos} | Regalados: ${s.regalados}</p>
+        <div class="flex">
+          <button onclick="vender(${i})">💵 Vender</button>
+          <button class="secondary" onclick="regalar(${i})">🎁 Regalar</button>
+        </div>
+      `;
+      lista.appendChild(card);
+    });
+
+    document.getElementById("inversion").innerText = inversion;
+    document.getElementById("ventas").innerText = ventas;
+    document.getElementById("ganancia").innerText = ganancia;
+    document.getElementById("gananciaNeta").innerText = ganancia - inversion;
+
+    let progreso = inversion > 0 ? Math.min(100, Math.round((ventas / inversion) * 100)) : 0;
+    document.getElementById("barra").style.width = progreso + "%";
+    document.getElementById("barra").innerText = progreso + "%";
+  }
+
+  function agregarFila() {
+    const div = document.getElementById("compras");
+    const row = document.createElement("div");
+    row.className = "flex";
+    row.innerHTML = `
+      <input type="text" placeholder="Sabor" class="sabor">
+      <select class="precioCompra">
+        <option value="1000">Costo 1000 (venta 2000)</option>
+        <option value="1500">Costo 1500 (venta 2500)</option>
+      </select>
+      <input type="number" placeholder="Cantidad" class="cantidad" style="width:80px;">
+    `;
+    div.appendChild(row);
+  }
+
+  function guardarCompras() {
+    const rows = document.querySelectorAll("#compras div");
+    rows.forEach(r => {
+      const nombre = r.querySelector(".sabor").value;
+      const precioCompra = Number(r.querySelector(".precioCompra").value);
+      const cantidad = Number(r.querySelector(".cantidad").value);
+
+      if (nombre && cantidad > 0) {
+        const precioVenta = precioCompra === 1000 ? 2000 : 2500;
+        sabores.push({ nombre, precioCompra, precioVenta, cantidad, vendidos: 0, regalados: 0 });
+      }
+    });
+    document.getElementById("compras").innerHTML = "";
+    render();
+  }
+
+  function vender(i) {
+    if (sabores[i].cantidad > 0) {
+      sabores[i].cantidad--;
+      sabores[i].vendidos++;
+      render();
+    }
+  }
+
+  function regalar(i) {
+    if (sabores[i].cantidad > 0) {
+      sabores[i].cantidad--;
+      sabores[i].regalados++;
+      render();
+    }
+  }
+
+  function guardarDatos() {
+    localStorage.setItem("sabores", JSON.stringify(sabores));
+    localStorage.setItem("fechaInicio", fechaInicio);
+    alert("Datos guardados ✔");
+  }
+
+  function nuevoPedido() {
+    if (sabores.length === 0) {
+      alert("No hay pedido actual para cerrar.");
+      return;
+    }
+
+    let fechaFin = new Date().toLocaleString();
+
+    historial.push({
+      fechaInicio,
+      fechaFin,
+      sabores
+    });
+
+    localStorage.setItem("historial", JSON.stringify(historial));
+
+    sabores = [];
+    fechaInicio = new Date().toLocaleString();
+
+    localStorage.setItem("sabores", JSON.stringify(sabores));
+    localStorage.setItem("fechaInicio", fechaInicio);
+
+    render();
+    alert("Nuevo pedido creado ✔");
+  }
+
+  function mostrarHistorial() {
+    const div = document.getElementById("historial");
+    div.style.display = "block";
+    div.innerHTML = "<h2>📚 Historial de pedidos</h2>";
+
+    if (historial.length === 0) {
+      div.innerHTML += "<p>No hay pedidos anteriores.</p>";
+      return;
+    }
+
+    historial.forEach((p, i) => {
+      let inversion = 0, ventas = 0, ganancia = 0;
+
+      p.sabores.forEach(s => {
+        inversion += s.precioCompra * (s.cantidad + s.vendidos + s.regalados);
+        ventas += s.vendidos * s.precioVenta;
+        ganancia += s.vendidos * (s.precioVenta - s.precioCompra);
+      });
+
+      div.innerHTML += `
+        <div class="card">
+          <h3>Pedido ${i + 1}</h3>
+          <p><b>Fecha inicio:</b> ${p.fechaInicio}</p>
+          <p><b>Fecha fin:</b> ${p.fechaFin}</p>
+          <p><b>Inversión total:</b> $${inversion}</p>
+          <p><b>Ventas totales:</b> $${ventas}</p>
+          <p><b>Ganancia neta:</b> $${ganancia}</p>
+          <h4>Sabores:</h4>
+          <ul>
+            ${p.sabores.map(s => `<li>${s.nombre}: ${s.vendidos} vendidos, ${s.regalados} regalados</li>`).join("")}
+          </ul>
+        </div>
+      `;
+    });
+  }
+
+  render();
+</script>
+
+</body>
+</html>
